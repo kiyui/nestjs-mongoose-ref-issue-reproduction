@@ -1,8 +1,8 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import mongoose, { HydratedDocument, Types } from 'mongoose';
-import { Article } from 'src/article/article.schema';
-import { Author } from 'src/author/author.schema';
-import { Post } from 'src/post/post.schema';
+import type { Article } from 'src/article/article.schema';
+import type { Author } from 'src/author/author.schema';
+import type { Post } from 'src/post/post.schema';
 
 export type CommentDocument = HydratedDocument<Comment>;
 
@@ -10,7 +10,7 @@ export type CommentDocument = HydratedDocument<Comment>;
 export class Comment {
   @Prop({
     type: mongoose.Schema.Types.ObjectId,
-    ref: Author.name,
+    ref: 'Author',
     required: true,
   })
   author: Types.ObjectId | Author;
@@ -31,7 +31,7 @@ export class Comment {
   @Prop({
     type: String,
     required: true,
-    enum: [Article.name, Post.name],
+    enum: ['Article', 'Post'],
   })
   docModel: string;
 }

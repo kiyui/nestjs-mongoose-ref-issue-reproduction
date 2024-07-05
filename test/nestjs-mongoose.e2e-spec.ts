@@ -2,7 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import { getModelToken, MongooseModule } from '@nestjs/mongoose';
-import mongoose, { Model } from 'mongoose';
+import mongoose, { Error, Model } from 'mongoose';
 import { faker } from '@faker-js/faker';
 import { AuthorModule } from 'src/author/author.module';
 import { Author } from 'src/author/author.schema';
@@ -14,8 +14,12 @@ import { CommentModule } from 'src/comment/comment.module';
 import { Comment } from 'src/comment/comment.schema';
 import { Spotlight } from 'src/spotlight/spotlight.schema';
 import { SpotlightModule } from 'src/spotlight/spotlight.module';
+import {
+  ArticleEmbedSection,
+  ArticleSection,
+} from 'src/article/article-section.schema';
 
-describe('Mongoose', () => {
+describe('NestJS Mongoose Sanity Checks', () => {
   let mongod: MongoMemoryServer;
   let app: INestApplication;
 
@@ -74,12 +78,22 @@ describe('Mongoose', () => {
       {
         author: author1._id,
         name: faker.lorem.sentence(),
-        content: faker.lorem.paragraph(),
+        sections: [
+          {
+            type: 'text',
+            content: faker.lorem.paragraph(),
+          },
+        ],
       },
       {
         author: author2._id,
         name: faker.lorem.sentence(),
-        content: faker.lorem.paragraph(),
+        sections: [
+          {
+            type: 'text',
+            content: faker.lorem.paragraph(),
+          },
+        ],
       },
     ]);
 
@@ -181,12 +195,22 @@ describe('Mongoose', () => {
       {
         author: author1._id,
         name: faker.lorem.sentence(),
-        content: faker.lorem.paragraph(),
+        sections: [
+          {
+            type: 'text',
+            content: faker.lorem.paragraph(),
+          },
+        ],
       },
       {
         author: author2._id,
         name: faker.lorem.sentence(),
-        content: faker.lorem.paragraph(),
+        sections: [
+          {
+            type: 'text',
+            content: faker.lorem.paragraph(),
+          },
+        ],
       },
     ]);
 
@@ -237,5 +261,166 @@ describe('Mongoose', () => {
     expect(postSpotlight.docs.every((doc) => doc instanceof PostModel)).toBe(
       true,
     );
+  });
+
+  it('should validate embedded discriminators in arrays', async () => {
+    const author = await AuthorModel.create({
+      name: faker.person.fullName(),
+      description: faker.person.bio(),
+    });
+
+    await expect(
+      ArticleModel.create({
+        author: author._id,
+        name: faker.lorem.sentence(),
+        sections: [{ type: 'text', invalid: faker.lorem.paragraph() }],
+      }),
+    ).rejects.toThrow(Error.ValidationError);
+
+    await expect(
+      ArticleModel.create({
+        author: author._id,
+        name: faker.lorem.sentence(),
+        sections: [{ type: 'text', content: faker.lorem.paragraph() }],
+      }),
+    ).resolves.not.toThrow();
+  });
+
+  it('should be able to populate embedded discriminators in arrays', async () => {
+    const [author1, author2, author3] = await AuthorModel.create([
+      {
+        name: faker.person.fullName(),
+        description: faker.person.bio(),
+      },
+      {
+        name: faker.person.fullName(),
+        description: faker.person.bio(),
+      },
+      {
+        name: faker.person.fullName(),
+      },
+    ]);
+
+    const [article1, article2] = await ArticleModel.create([
+      {
+        author: author1._id,
+        name: faker.lorem.sentence(),
+        sections: [
+          {
+            type: 'text',
+            content: faker.lorem.paragraph(),
+          },
+        ],
+      },
+      {
+        author: author2._id,
+        name: faker.lorem.sentence(),
+        sections: [
+          {
+            type: 'text',
+            content: faker.lorem.paragraph(),
+          },
+        ],
+      },
+    ]);
+
+    const [post1, post2, post3] = await PostModel.create([
+      {
+        author: author2._id,
+        content: faker.lorem.paragraph(),
+      },
+      {
+        author: author3._id,
+        content: faker.lorem.paragraph(),
+      },
+      {
+        content: faker.lorem.paragraph(),
+      },
+    ]);
+
+    const [articleSpotlight, postSpotlight] = await SpotlightModel.create([
+      {
+        docs: [article1._id, article2._id],
+        docsModel: Article.name,
+      },
+      {
+        docs: [post1._id, post2._id, post3._id],
+        docsModel: Post.name,
+      },
+    ]);
+
+    const article3 = await ArticleModel.create({
+      author: author3._id,
+      name: faker.lorem.sentence(),
+      sections: [
+        {
+          type: 'text',
+          content: faker.lorem.paragraph(),
+        },
+        {
+          type: 'embed',
+          embeds: [author1._id, author2._id],
+          embedType: Author.name,
+        },
+        {
+          type: 'image',
+          uri: faker.image.url(),
+          credits: faker.lorem.paragraph(),
+        },
+        {
+          type: 'embed',
+          embeds: [articleSpotlight, postSpotlight],
+          embedType: Spotlight.name,
+        },
+      ],
+    });
+
+    // Assert that the embed sections are not populated
+    expect(
+      article3.sections
+        .filter(
+          (section: ArticleSection): section is ArticleEmbedSection =>
+            section.type === 'embed',
+        )
+        .every((section) =>
+          section.embeds.every(
+            (embed) => embed instanceof mongoose.Types.ObjectId,
+          ),
+        ),
+    ).toBe(true);
+
+    // Populate and assert that the sections are populated with the appropriate models
+    await article3.populate({
+      path: 'sections',
+      populate: [
+        {
+          path: 'embeds',
+        },
+      ],
+    });
+
+    expect(
+      article3.sections
+        .filter(
+          (section: ArticleSection): section is ArticleEmbedSection =>
+            section.type === 'embed',
+        )
+        .filter((section) => section.embedType === Author.name)
+        .every((section) =>
+          section.embeds.every((embed) => embed instanceof AuthorModel),
+        ),
+    ).toBe(true);
+
+    expect(
+      article3.sections
+        .filter(
+          (section: ArticleSection): section is ArticleEmbedSection =>
+            section.type === 'embed',
+        )
+        .filter((section) => section.embedType === Spotlight.name)
+        .every((section) =>
+          section.embeds.every((embed) => embed instanceof SpotlightModel),
+        ),
+    ).toBe(true);
   });
 });

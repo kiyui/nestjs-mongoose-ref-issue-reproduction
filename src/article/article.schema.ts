@@ -1,6 +1,7 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import mongoose, { HydratedDocument, Types } from 'mongoose';
 import { Author } from 'src/author/author.schema';
+import { ArticleSection, ArticleSectionSchema } from './article-section.schema';
 
 export type ArticleDocument = HydratedDocument<Article>;
 
@@ -20,10 +21,10 @@ export class Article {
   author: Types.ObjectId | Author;
 
   @Prop({
-    type: String,
+    type: [{ type: ArticleSectionSchema }],
     required: true,
   })
-  content: string;
+  sections: ArticleSection[];
 }
 
 export const ArticleSchema = SchemaFactory.createForClass(Article);

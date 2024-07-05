@@ -1,7 +1,7 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import mongoose, { HydratedDocument, Types } from 'mongoose';
-import { Article } from 'src/article/article.schema';
-import { Post } from 'src/post/post.schema';
+import type { Article } from 'src/article/article.schema';
+import type { Post } from 'src/post/post.schema';
 
 export type SpotlightDocument = HydratedDocument<Spotlight>;
 
@@ -21,7 +21,7 @@ export class Spotlight {
   @Prop({
     type: String,
     required: true,
-    enum: [Article.name, Post.name],
+    enum: ['Article', 'Post'],
   })
   docsModel: string;
 }
