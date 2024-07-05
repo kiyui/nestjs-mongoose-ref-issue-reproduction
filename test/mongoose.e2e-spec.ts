@@ -12,6 +12,8 @@ import { PostModule } from 'src/post/post.module';
 import { Post } from 'src/post/post.schema';
 import { CommentModule } from 'src/comment/comment.module';
 import { Comment } from 'src/comment/comment.schema';
+import { Spotlight } from 'src/spotlight/spotlight.schema';
+import { SpotlightModule } from 'src/spotlight/spotlight.module';
 
 describe('Mongoose', () => {
   let mongod: MongoMemoryServer;
@@ -21,6 +23,7 @@ describe('Mongoose', () => {
   let ArticleModel: Model<Article>;
   let PostModel: Model<Post>;
   let CommentModel: Model<Comment>;
+  let SpotlightModel: Model<Spotlight>;
 
   beforeAll(async () => {
     mongod = await MongoMemoryServer.create();
@@ -31,6 +34,7 @@ describe('Mongoose', () => {
         ArticleModule,
         PostModule,
         CommentModule,
+        SpotlightModule,
         MongooseModule.forRoot(mongod.getUri()),
       ],
     }).compile();
@@ -41,6 +45,7 @@ describe('Mongoose', () => {
     ArticleModel = app.get(getModelToken(Article.name));
     PostModel = app.get(getModelToken(Post.name));
     CommentModel = app.get(getModelToken(Comment.name));
+    SpotlightModel = app.get(getModelToken(Spotlight.name));
 
     await app.init();
   });
@@ -155,5 +160,82 @@ describe('Mongoose', () => {
         .filter((comment) => comment.docModel === Post.name)
         .every((comment) => comment.doc instanceof PostModel),
     ).toBe(true);
+  });
+
+  it('can use refPath for vector references', async () => {
+    const [author1, author2, author3] = await AuthorModel.create([
+      {
+        name: faker.person.fullName(),
+        description: faker.person.bio(),
+      },
+      {
+        name: faker.person.fullName(),
+        description: faker.person.bio(),
+      },
+      {
+        name: faker.person.fullName(),
+      },
+    ]);
+
+    const [article1, article2] = await ArticleModel.create([
+      {
+        author: author1._id,
+        name: faker.lorem.sentence(),
+        content: faker.lorem.paragraph(),
+      },
+      {
+        author: author2._id,
+        name: faker.lorem.sentence(),
+        content: faker.lorem.paragraph(),
+      },
+    ]);
+
+    const [post1, post2, post3] = await PostModel.create([
+      {
+        author: author2._id,
+        content: faker.lorem.paragraph(),
+      },
+      {
+        author: author3._id,
+        content: faker.lorem.paragraph(),
+      },
+      {
+        content: faker.lorem.paragraph(),
+      },
+    ]);
+
+    const [articleSpotlight, postSpotlight] = await SpotlightModel.create([
+      {
+        docs: [article1._id, article2._id],
+        docsModel: Article.name,
+      },
+      {
+        docs: [post1._id, post2._id, post3._id],
+        docsModel: Post.name,
+      },
+    ]);
+
+    // Assert that the "docs" field is not populated
+    expect(
+      articleSpotlight.docs.every(
+        (doc) => doc instanceof mongoose.Types.ObjectId,
+      ),
+    ).toBe(true);
+
+    expect(
+      postSpotlight.docs.every((doc) => doc instanceof mongoose.Types.ObjectId),
+    ).toBe(true);
+
+    // Populate the "docs" field and assert that the populated fields use the appropriate models
+    await articleSpotlight.populate('docs');
+    await postSpotlight.populate('docs');
+
+    expect(
+      articleSpotlight.docs.every((doc) => doc instanceof ArticleModel),
+    ).toBe(true);
+
+    expect(postSpotlight.docs.every((doc) => doc instanceof PostModel)).toBe(
+      true,
+    );
   });
 });
