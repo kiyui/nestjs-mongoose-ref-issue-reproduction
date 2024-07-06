@@ -6,5 +6,6 @@ import { Article, ArticleSchema } from './article.schema';
   imports: [
     MongooseModule.forFeature([{ name: Article.name, schema: ArticleSchema }]),
   ],
+  exports: [MongooseModule],
 })
 export class ArticleModule {}

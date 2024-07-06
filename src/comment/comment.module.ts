@@ -6,5 +6,6 @@ import { Comment, CommentSchema } from './comment.schema';
   imports: [
     MongooseModule.forFeature([{ name: Comment.name, schema: CommentSchema }]),
   ],
+  exports: [MongooseModule],
 })
 export class CommentModule {}

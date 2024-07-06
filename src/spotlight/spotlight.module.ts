@@ -8,5 +8,6 @@ import { Spotlight, SpotlightSchema } from './spotlight.schema';
       { name: Spotlight.name, schema: SpotlightSchema },
     ]),
   ],
+  exports: [MongooseModule],
 })
 export class SpotlightModule {}

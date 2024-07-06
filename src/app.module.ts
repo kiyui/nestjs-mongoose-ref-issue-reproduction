@@ -1,4 +1,6 @@
 import { Module } from '@nestjs/common';
+import { MongooseModule } from '@nestjs/mongoose';
+import { MongoMemoryServer } from 'mongodb-memory-server';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { PostModule } from './post/post.module';
@@ -8,7 +10,22 @@ import { AuthorModule } from './author/author.module';
 import { SpotlightModule } from './spotlight/spotlight.module';
 
 @Module({
-  imports: [PostModule, ArticleModule, CommentModule, AuthorModule, SpotlightModule],
+  imports: [
+    MongooseModule.forRootAsync({
+      useFactory: async () => {
+        const mongod = await MongoMemoryServer.create();
+
+        return {
+          uri: mongod.getUri(),
+        };
+      },
+    }),
+    PostModule,
+    ArticleModule,
+    CommentModule,
+    AuthorModule,
+    SpotlightModule,
+  ],
   controllers: [AppController],
   providers: [AppService],
 })
