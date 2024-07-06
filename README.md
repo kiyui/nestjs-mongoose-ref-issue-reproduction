@@ -1,73 +1,194 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="200" alt="Nest Logo" /></a>
-</p>
+# nestjs-mongoose-ref-issue-reproduction
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+This repository is a reproduction of an issue I am facing with [`@nestjs/mongoose`][nestjs_mongoose], where when using a [dynamic ref][mongoose_dynamic_ref] in a (NestJS Mongoose) schema, the `ref` function appears to be resolved at the time the schema is created, instead of at runtime.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://coveralls.io/github/nestjs/nest?branch=master" target="_blank"><img src="https://coveralls.io/repos/github/nestjs/nest/badge.svg?branch=master#9" alt="Coverage" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+In this reproduction, I am using a dynamic `ref` inside an [array of embedded discriminators][mongoose_array_embedded_discriminator]. This is so that I can define various article section types that can be embedded inside an article document.
 
-## Description
+This is an excerpt from `src/article/article-section.schema.ts` using  [`@nestjs/mongoose`][nestjs_mongoose] demonstrating the value of `this` inside the `ref` function:
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
-
-## Installation
-
-```bash
-$ npm install
+```typescript
+@Prop({
+  type: [
+    {
+      type: mongoose.Schema.Types.ObjectId,
+      ref() {
+        console.log(this); // => {
+                           // =>   type: [Function: SchemaObjectId] {
+                           // =>     schemaName: 'ObjectId',
+                           // =>     defaultOptions: {},
+                           // =>     get: [Function (anonymous)],
+                           // =>     set: [Function: set],
+                           // =>     setters: [],
+                           // =>     _checkRequired: [Function (anonymous)],
+                           // =>     _cast: [Function: castObjectId],
+                           // =>     cast: [Function: cast],
+                           // =>     _defaultCaster: [Function (anonymous)],
+                           // =>     checkRequired: [Function (anonymous)]
+                           // =>   },
+                           // =>   ref: [Function: ref]
+                           // => }
+        return this.embedType;
+      },
+    },
+  ],
+  required: true,
+})
 ```
 
-## Running the app
+In a regular Mongoose schema, the `ref` function would be resolved at runtime, allowing for dynamic references.
 
-```bash
-# development
-$ npm run start
+## Proof of work
 
-# watch mode
-$ npm run start:dev
+This repository adopts the regular NestJS structure for separation of concerns, with the following structure:
 
-# production mode
-$ npm run start:prod
+- The files `<module>/<module>.schema.ts` contain regular NestJS Mongoose schema definitions.
+- The files `<module>/<module>.model.ts` contain plain Mongoose schema & model definitions.
+
+Two E2E tests, running the same `test/run-mongoose-tests.ts` assertions verify that the issue is present in the NestJS Mongoose schema, but not in the plain Mongoose schema:
+
+- NestJS Mongoose: `test/nestjs-mongoose.e2e-spec.ts`
+- Plain Mongoose: `test/mongoose.e2e-spec.ts`
+
+Set up the project by running `npm install` and then `npm run test:e2e` to run the tests.
+
+**Note**: This repository uses [Mongo Memory Server][mongo_memory_server] to run the tests (and provide a throwaway database environment for running the application). I have experienced issues getting it running on [NixOS][nixos] in the past.
+
+To verify that the issue doesn't just exist in the test environment, I have also replicated the issue in the application itself. Run `npm run start:dev` to start the dev server, and then fetch `http://localhost:4200` to see the following (invalid) response:
+
+```json
+{
+  "_id": "6688ab3f9d5e834ea10f9d37",
+  "name": "Abstergo tergum distinctio convoco amet.",
+  "author": "6688ab3f9d5e834ea10f9d25",
+  "sections": [
+    {
+      "type": "text",
+      "content": "Curvo argentum arbustum. Tersus magnam anser conduco stabilis vix ago aedificium vindico cuppedia. Utor ubi calcar tenus absum vinitor solvo canto."
+    },
+    {
+      "type": "embed",
+      "embeds": [],
+      "embedType": "Author"
+    },
+    {
+      "type": "image",
+      "uri": "https://picsum.photos/seed/yAvxSQIGk/640/480",
+      "credits": "Stips velum vulariter. Desidero tabgo delibero aedificium conculco velut caritas. Defaeco clam valens verumtamen velociter velociter."
+    },
+    {
+      "type": "embed",
+      "embeds": [],
+      "embedType": "Spotlight"
+    }
+  ],
+  "__v": 0
+}
 ```
 
-## Test
+## Workaround
 
-```bash
-# unit tests
-$ npm run test
+Fortunately there is a workaround, demonstrated in the [`workaround` branch][workaround_branch] where we use the NestJS Mongoose schema to define the discriminator, and then use a plain Mongoose schema to define the embedded discriminator:
 
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
+```diff
+ ArticleSectionSchema.discriminator(
+   ArticleSectionType.Embed,
+-  ArticleEmbedSectionSchema,
++  new mongoose.Schema({
++    embeds: {
++      type: [
++        {
++          type: mongoose.Schema.Types.ObjectId,
++          ref() {
++            return this.embedType;
++          },
++        },
++      ],
++      required: true,
++    },
++    embedType: {
++      type: String,
++      required: true,
++      enum: ['Author', 'Article', 'Post', 'Comment', 'Spotlight'],
++    },
++  }),
+ );
 ```
 
-## Support
+The expected output for the application is:
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+```json
 
-## Stay in touch
+{
+  "_id": "6688a3cb4e3fa6c920bc88fc",
+  "name": "Textor utilis baiulus tergeo.",
+  "author": "6688a3cb4e3fa6c920bc88e8",
+  "sections": [
+    {
+      "type": "text",
+      "content": "Administratio pecco suasoria. Creptio vulgaris caste denuo vel advoco utique aegre vomer. Cura xiphias vir suffragium sint.",
+      "_id": "6688a3cb4e3fa6c920bc88fd"
+    },
+    {
+      "type": "embed",
+      "embeds": [
+        {
+          "_id": "6688a3cb4e3fa6c920bc88e6",
+          "name": "Luke Koch-Aufderhar",
+          "description": "aid junkie  🧙🏿",
+          "__v": 0
+        },
+        {
+          "_id": "6688a3cb4e3fa6c920bc88e7",
+          "name": "Jeffery Braun Sr.",
+          "description": "teacher junkie, scientist",
+          "__v": 0
+        }
+      ],
+      "embedType": "Author",
+      "_id": "6688a3cb4e3fa6c920bc88fe"
+    },
+    {
+      "type": "image",
+      "uri": "https://picsum.photos/seed/LGbnTd/640/480",
+      "credits": "Utor infit capio autem caveo sufficio. Pecto asporto circumvenio decens arcesso qui sursum. Crustulum cedo aperio ubi alius.",
+      "_id": "6688a3cb4e3fa6c920bc88ff"
+    },
+    {
+      "type": "embed",
+      "embeds": [
+        {
+          "_id": "6688a3cb4e3fa6c920bc88f8",
+          "docs": [
+            "6688a3cb4e3fa6c920bc88ec",
+            "6688a3cb4e3fa6c920bc88ee"
+          ],
+          "docsModel": "Article",
+          "__v": 0
+        },
+        {
+          "_id": "6688a3cb4e3fa6c920bc88f9",
+          "docs": [
+            "6688a3cb4e3fa6c920bc88f2",
+            "6688a3cb4e3fa6c920bc88f3",
+            "6688a3cb4e3fa6c920bc88f4"
+          ],
+          "docsModel": "Post",
+          "__v": 0
+        }
+      ],
+      "embedType": "Spotlight",
+      "_id": "6688a3cb4e3fa6c920bc8900"
+    }
+  ],
+  "__v": 0
+}
+```
 
-- Author - [Kamil Myśliwiec](https://kamilmysliwiec.com)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+See how the embeds are populated instead?
 
-## License
-
-Nest is [MIT licensed](LICENSE).
+[mongoose_array_embedded_discriminator]: https://mongoosejs.com/docs/discriminators.html#embedded-discriminators-in-arrays
+[mongoose_dynamic_ref]: https://mongoosejs.com/docs/populate.html#dynamic-ref
+[mongo_memory_server]: https://github.com/nodkz/mongodb-memory-server
+[nestjs_mongoose]: https://github.com/nestjs/mongoose
+[nixos]: https://nixos.org
+[workaround_branch]: https://github.com/kiyui/nestjs-mongoose-ref-issue-reproduction/tree/workaround
