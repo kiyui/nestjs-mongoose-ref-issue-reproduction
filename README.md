@@ -1,5 +1,7 @@
 # nestjs-mongoose-ref-issue-reproduction
 
+> [Fixed in 10.0.11][bug_fixed_comment]
+
 This repository is a reproduction of an issue I am facing with [`@nestjs/mongoose`][nestjs_mongoose], where when using a [dynamic ref][mongoose_dynamic_ref] in a (NestJS Mongoose) schema, the `ref` function appears to be resolved at the time the schema is created, instead of at runtime.
 
 In this reproduction, I am using a dynamic `ref` inside an [array of embedded discriminators][mongoose_array_embedded_discriminator]. This is so that I can define various article section types that can be embedded inside an article document.
@@ -186,6 +188,7 @@ The expected output for the application is:
 
 See how the embeds are populated instead?
 
+[bug_fixed_comment]: https://github.com/nestjs/mongoose/issues/2182#issuecomment-2426398314
 [mongoose_array_embedded_discriminator]: https://mongoosejs.com/docs/discriminators.html#embedded-discriminators-in-arrays
 [mongoose_dynamic_ref]: https://mongoosejs.com/docs/populate.html#dynamic-ref
 [mongo_memory_server]: https://github.com/nodkz/mongodb-memory-server
